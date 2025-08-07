@@ -1,27 +1,36 @@
-name: Get Subscription
+name: Get Duya Subscription
 
-on: [workflow_dispatch]
+on: 
+  workflow_dispatch:  # 手动触发
 
 jobs:
   get-sub:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4  # 同时升级 checkout
         
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5  # 升级到最新版
         with:
           python-version: '3.10'
       
       - name: Install dependencies
         run: pip install requests
       
-      - name: Run and save result
+      - name: Run subscription script
+        id: run-script
         run: |
-          python duya.py > subscription.txt  # 直接输出到文件
+          output=$(python duya_subscription.py)
+          echo "result=$output" >> $GITHUB_OUTPUT
       
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+      - name: Save result to file
+        run: |
+          echo "${{ steps.run-script.outputs.result }}" > subscription.txt
+      
+      - name: Upload subscription file
+        uses: actions/upload-artifact@v4  # 关键修复：升级到 v4
         with:
           name: duya-subscription
           path: subscription.txt
+          retention-days: 1

@@ -1,36 +1,56 @@
+# 针对 `duya.py` 文件的 GitHub Actions 工作流配置
+
+以下是专门为您的 `duya.py` 文件优化的工作流配置，解决了之前的弃用问题并适配了您的实际文件名：
+
+```yaml
 name: Get Duya Subscription
 
 on: 
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:  # 手动触发按钮
 
 jobs:
   get-sub:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4  # 同时升级 checkout
+      # 1. 获取仓库代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
         
-      - name: Set up Python
-        uses: actions/setup-python@v5  # 升级到最新版
+      # 2. 设置Python环境
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       
-      - name: Install dependencies
+      # 3. 安装依赖
+      - name: Install required packages
         run: pip install requests
       
-      - name: Run subscription script
+      # 4. 运行您的脚本
+      - name: Run duya.py script
         id: run-script
         run: |
-          output=$(python duya_subscription.py)
+          # 运行脚本并将输出保存到变量
+          output=$(python duya.py)
+          
+          # 设置输出变量供后续步骤使用
           echo "result=$output" >> $GITHUB_OUTPUT
+          
+          # 直接将结果写入文件（双重备份）
+          echo "$output" > subscription.txt
       
-      - name: Save result to file
-        run: |
-          echo "${{ steps.run-script.outputs.result }}" > subscription.txt
-      
+      # 5. 上传结果文件
       - name: Upload subscription file
-        uses: actions/upload-artifact@v4  # 关键修复：升级到 v4
+        uses: actions/upload-artifact@v4
         with:
           name: duya-subscription
-          path: subscription.txt
-          retention-days: 1
+          path: |
+            subscription.txt
+          retention-days: 1  # 只保留1天
+      
+      # 6. 上传脚本本身（可选）
+      - name: Upload script file
+        uses: actions/upload-artifact@v4
+        with:
+          name: script-file
+          path: duya.py

@@ -2,128 +2,110 @@ import requests
 import random
 import string
 import json
-import base64
-import time
+import base64  # 用于可能的 Base64 解码
+
 
 def generate_email():
-    """生成随机邮箱"""
-    user = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
-    domains = ['gmail.com', 'qq.com', '163.com', 'outlook.com']
-    return f"{user}@{random.choice(domains)}"
+    chars = string.ascii_lowercase + string.digits
+    domains = ['gmail.com', '163.com', '126.com', 'qq.com', 'outlook.com', 'hotmail.com']
+    name = ''.join(random.choice(chars) for _ in range(10))
+    return f"{name}@{random.choice(domains)}"
 
-def generate_password():
-    """生成随机密码"""
+
+def generate_password(length=10):
     chars = string.ascii_letters + string.digits
-    return ''.join(random.choices(chars, k=10))
+    return ''.join(random.choice(chars) for _ in range(length))
+
 
 def get_subscription():
-    """获取订阅主函数"""
-    BASE_URL = 'https://api.duya.pro'
-    endpoints = {
-        'register': '/v1/auth/register',
-        'login': '/v1/auth/login',
-        'subscribe': '/v1/public/user/subscribe'
+    register_url = 'https://api.duya.pro/v1/auth/register'
+    login_url = 'https://api.duya.pro/v1/auth/login'
+    subscription_url = 'https://api.duya.pro/v1/public/user/subscribe'
+    
+    email = generate_email()
+    password = generate_password()
+    user_agent = "Mozilla/5.0"
+    headers_base = {
+        'Content-Type': 'application/json',
+        'Origin': 'https://duya.pro',
+        'User-Agent': user_agent
     }
-    
-    user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
-    
+
     try:
-        # 生成账号
-        email = generate_email()
-        password = generate_password()
-        print(f"📧 邮箱: {email}")
-        print(f"🔑 密码: {password}")
-        
-        # 1. 注册
-        reg_url = BASE_URL + endpoints['register']
-        reg_data = json.dumps({'email': email, 'password': password})
-        reg_headers = {
-            'Content-Type': 'application/json',
-            'Origin': 'https://duya.pro',
-            'Referer': 'https://duya.pro/register',
-            'User-Agent': user_agent
-        }
-        
-        reg_res = requests.post(reg_url, headers=reg_headers, data=reg_data, timeout=15)
-        reg_json = reg_res.json()
-        
-        if not reg_json.get('success'):
-            return f"❌ 注册失败: {reg_json.get('message', '未知错误')}"
-        
-        print("✅ 注册成功")
-        
-        # 2. 登录
-        time.sleep(1)  # 防请求过快
-        login_url = BASE_URL + endpoints['login']
-        login_data = json.dumps({'email': email, 'password': password})
-        login_headers = {
-            'Content-Type': 'application/json',
-            'Origin': 'https://duya.pro',
-            'Referer': 'https://duya.pro/login',
-            'User-Agent': user_agent
-        }
-        
-        login_res = requests.post(login_url, headers=login_headers, data=login_data, timeout=15)
-        login_json = login_res.json()
-        token = login_json.get('data', {}).get('token')
-        
+        print(f"[+] 生成的随机邮箱: {email}")
+        print(f"[+] 生成的随机密码: {password}")
+
+        # 1. 注册账号
+        register_data = json.dumps({'email': email, 'password': password})
+        register_headers = headers_base.copy()
+        register_headers.update({'Referer': 'https://duya.pro/register'})
+        register_response = requests.post(
+            register_url, 
+            headers=register_headers, 
+            data=register_data
+        )
+        register_result = register_response.json()
+        token = register_result.get('data', {}).get('token')
         if not token:
-            return "❌ 登录失败: 未获取到token"
-        
-        print("✅ 登录成功")
-        
-        # 3. 获取订阅token
-        time.sleep(1)
-        sub_url = BASE_URL + endpoints['subscribe']
-        sub_headers = {
+            raise Exception('注册失败或未返回 token')
+        print(f"[+] 注册成功，Token: {token}")
+
+        # 2. 登录账号（某些 API 可能不需要这步，视情况调整）
+        login_data = json.dumps({'email': email, 'password': password})
+        login_headers = headers_base.copy()
+        login_headers.update({'Referer': 'https://duya.pro/login'})
+        login_response = requests.post(
+            login_url, 
+            headers=login_headers, 
+            data=login_data
+        )
+        login_result = login_response.json()
+        token = login_result.get('data', {}).get('token')
+        if not token:
+            raise Exception('登录失败或未返回 token')
+        print(f"[+] 登录成功，Token: {token}")
+
+        # 3. 获取订阅 token
+        subscribe_headers = {
             'Authorization': token,
             'User-Agent': user_agent,
             'Origin': 'https://duya.pro',
             'Referer': 'https://duya.pro/dashboard'
         }
-        
-        sub_res = requests.get(sub_url, headers=sub_headers, timeout=15)
-        sub_json = sub_res.json()
-        
-        # 检查订阅列表
-        sub_list = sub_json.get('data', {}).get('list', [])
+        subscribe_response = requests.get(
+            subscription_url, 
+            headers=subscribe_headers
+        )
+        subscribe_result = subscribe_response.json()
+        sub_list = subscribe_result.get('data', {}).get('list', [])
         if not sub_list:
-            return "❌ 未获取到订阅列表"
-        
-        # 获取第一个订阅token
+            raise Exception('未获取到订阅列表')
         sub_token = sub_list[0].get('token')
         if not sub_token:
-            return "❌ 未找到订阅token"
+            raise Exception('未找到订阅 token')
+        print(f"[+] 订阅 Token: {sub_token}")
+
+        # 4. 获取订阅内容
+        final_url = f"https://api.duya.pro/api/subscribe?token={sub_token}&user_agent={requests.utils.quote(user_agent)}"
+        content_response = requests.get(final_url, headers={'User-Agent': user_agent})
+        content = content_response.text
         
-        print(f"🔗 订阅Token: {sub_token}")
-        
-        # 4. 下载订阅内容
-        final_url = f"{BASE_URL}/api/subscribe?token={sub_token}"
-        content_res = requests.get(final_url, headers={'User-Agent': user_agent}, timeout=15)
-        content = content_res.text
-        
-        # 尝试Base64解码
+        # 尝试解码 Base64（如果是 Base64 格式）
         try:
-            decoded = base64.b64decode(content).decode('utf-8')
-            return "✅ 订阅获取成功！\n\n" + decoded
+            decoded_content = base64.b64decode(content).decode('utf-8')
+            print("\n[+] 解码后的订阅内容：")
+            print(decoded_content)
+            return decoded_content
         except:
-            return "✅ 订阅获取成功！\n\n" + content
-            
+            print("\n[+] 原始订阅内容（非 Base64）：")
+            print(content)
+            return content
     except Exception as e:
-        return f"⚠️ 发生错误: {str(e)}"
+        print(f"[-] 发生错误: {str(e)}")
+        return None
+
 
 if __name__ == "__main__":
-    print("="*50)
-    print("🚀 开始获取订阅配置")
-    print("="*50)
-    
+    print("===== 开始获取订阅 =====")
     result = get_subscription()
-    
-    print("\n" + "="*50)
-    print("✨ 运行结果")
-    print("="*50)
-    print(result)
-    print("="*50)
-    
-    # 手机端友好提示
-    print("\n💡 提示：长按屏幕可复制订阅内容")
+    print("\n===== 运行结束 =====")
